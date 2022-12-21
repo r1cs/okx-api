@@ -8,6 +8,12 @@ import (
 	"github.com/r1cs/okx-api/common/utils"
 	"sync/atomic"
 )
+var defalutDialer = websocket.DefaultDialer
+
+type MsgEvent struct {
+	Type int
+	Data []byte
+}
 
 type Client struct {
 	Conn         *websocket.Conn
@@ -16,9 +22,23 @@ type Client struct {
 	started uint32
 }
 
-type MsgEvent struct {
-	Type int
-	Data []byte
+
+func NewClient(url string) *Client {
+	c, _, err := defalutDialer.Dial(url, nil)
+	utils.Ensure(err)
+
+	return &Client{
+		Conn: c,
+		close: make(chan struct{}),
+	}
+}
+
+func(c *Client)Start()error{
+	if !atomic.CompareAndSwapUint32(&c.started,0,1){
+		return fmt.Errorf("already started")
+	}
+	go c.readLoop()
+	return nil
 }
 
 func (c *Client) readLoop() {
@@ -49,25 +69,9 @@ func (c *Client) SubscribeReadMessage(ch chan<- *MsgEvent) event.Subscription {
 }
 
 
-var defalutDialer = websocket.DefaultDialer
 
-func NewClient(url string) *Client {
-	c, _, err := defalutDialer.Dial(url, nil)
-	utils.Ensure(err)
 
-	return &Client{
-		Conn: c,
-		close: make(chan struct{}),
-	}
-}
 
-func(c *Client)Start()error{
-	if !atomic.CompareAndSwapUint32(&c.started,0,1){
-		return fmt.Errorf("already started")
-	}
-	go c.readLoop()
-	return nil
-}
 
 func (c *Client) Close()error {
 	close(c.close)
